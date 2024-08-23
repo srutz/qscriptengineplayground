@@ -24,16 +24,25 @@ QT_END_NAMESPACE
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
-    QScriptEngine *m_scriptEngine;
-    PropertyGrid *m_propertyGrid;
-    QTextEdit *m_editor;
-    QTextEdit *m_output;
+    QScriptEngine *m_scriptEngine;   // scriptengine
+    PropertyGrid *m_propertyGrid;    // widget
+    QTextEdit *m_editor;             // widget for source code
+    QTextEdit *m_output;             // widget for script output
 
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+    /* run the script that is currently in the editor */
     void runScript();
+
+    /* insert code that opens a message box */
+    void insertMessageBoxCode();
+
+    /* this method is called from the script */
+    QScriptValue messageBox(QScriptContext *context, QScriptEngine *engine);
+
+    static MainWindow *activeInstance; // access the mainwindow statically via this method
 private:
     Ui::MainWindow *ui;
 };

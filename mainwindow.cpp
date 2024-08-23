@@ -4,12 +4,34 @@
 #include <QDebug>
 #include <QToolBar>
 #include <QSplitter>
+#include <QMessageBox>
+
+MainWindow *MainWindow::activeInstance = nullptr;
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
 {
+    MainWindow::activeInstance = this;
     ui->setupUi(this);
+
+    /* configure script engine */
+    m_scriptEngine = new QScriptEngine(this);
+
+    // context is a QObject we can interact with from the scriptengine
+    auto context = new NativeContext(this);
+    auto jsObject = m_scriptEngine->newQObject(context);
+    m_scriptEngine->globalObject().setProperty("context", jsObject);
+
+    // showMessageBox is a function implemented in c++ that we can call from the scriptengine
+    auto l = [] (QScriptContext *context, QScriptEngine *engine) {
+        auto mainWindow = MainWindow::activeInstance;
+        return mainWindow->messageBox(context, engine);
+    };
+    QScriptValue func = m_scriptEngine->newFunction(l, 1);
+    m_scriptEngine->globalObject().setProperty("messageBox", func);
+
+
 
     /* Setup the gui
      * we have 2 areas for scripting and output
@@ -21,8 +43,7 @@ MainWindow::MainWindow(QWidget *parent)
         this->close();
     });
 
-    auto context = new NativeContext(this);
-
+    /* configure gui and actions */
     m_editor = new QTextEdit(this);
     m_editor->setPlaceholderText("Enter script here");
     m_editor->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -41,9 +62,6 @@ MainWindow::MainWindow(QWidget *parent)
     m_propertyGrid->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
 
-    m_scriptEngine = new QScriptEngine(this);
-    auto jsObject = m_scriptEngine->newQObject(context);
-    m_scriptEngine->globalObject().setProperty("context", jsObject);
 
     auto contentLayout = new QVBoxLayout(ui->content);
     contentLayout->setContentsMargins(0, 0, 0, 0);
@@ -66,17 +84,26 @@ MainWindow::MainWindow(QWidget *parent)
 
     auto toolbar = new QToolBar(this);
     this->addToolBar(toolbar);
+
     auto runScriptAction = new QAction(this);
     runScriptAction->setText("Run Script");
     runScriptAction->setShortcut(QKeySequence::fromString("CTRL+R"));
+    toolbar->addAction(runScriptAction);
     connect(runScriptAction, &QAction::triggered, this, &MainWindow::runScript);
     connect(ui->actionRunScript, &QAction::triggered, this, &MainWindow::runScript);
-    toolbar->addAction(runScriptAction);
+
+    auto messageBoxCodeAction = new QAction(this);
+    messageBoxCodeAction->setText("Insert MessageBox-Code");
+    messageBoxCodeAction->setShortcut(QKeySequence::fromString("CTRL+M"));
+    toolbar->addAction(messageBoxCodeAction);
+    connect(messageBoxCodeAction, &QAction::triggered, this, &MainWindow::insertMessageBoxCode);
+    connect(ui->actionRunMessageBoxCode, &QAction::triggered, this, &MainWindow::insertMessageBoxCode);
 }
 
 MainWindow::~MainWindow()
 {
     delete ui;
+    MainWindow::activeInstance = nullptr;
 }
 
 
@@ -92,3 +119,33 @@ void MainWindow::runScript()
     m_output->append(result.toString());
     m_propertyGrid->updateGui();
 }
+
+/* we end up here when the user runs shows a
+ * message box...
+ * this happens directly via the script
+ */
+void MainWindow::insertMessageBoxCode()
+{
+    this->m_editor->setText(
+        "/* invoking a c++ function via the scriptengine */\n"
+        "messageBox(\"Hello Script \" + new Date().toString());");
+}
+
+
+QScriptValue MainWindow::messageBox(QScriptContext *context, QScriptEngine *engine) {
+    if (context->argumentCount() != 1) {
+        return context->throwError(QScriptContext::SyntaxError, "Function requires exactly 1 argument.");
+    }
+    QString message = context->argument(0).toString();
+
+    QMessageBox messageBox(QApplication::activeWindow());
+    messageBox.setWindowTitle("Message");
+    messageBox.setText(message);
+    messageBox.setIcon(QMessageBox::Information);
+    messageBox.setStandardButtons(QMessageBox::Ok);
+    messageBox.setDefaultButton(QMessageBox::Ok);
+    auto result = messageBox.exec();
+
+    return QScriptValue(result);
+}
+

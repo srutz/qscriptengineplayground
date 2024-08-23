@@ -48,6 +48,7 @@
     <addaction name="actionExit"/>
     <addaction name="separator"/>
     <addaction name="actionRunScript"/>
+    <addaction name="actionRunMessageBoxCode"/>
    </widget>
    <addaction name="menuFile"/>
   </widget>
@@ -60,6 +61,11 @@
   <action name="actionRunScript">
    <property name="text">
     <string>Run Script</string>
+   </property>
+  </action>
+  <action name="actionRunMessageBoxCode">
+   <property name="text">
+    <string>Insert MessageBoxCode</string>
    </property>
   </action>
  </widget>
